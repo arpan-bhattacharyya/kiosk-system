@@ -1,5 +1,5 @@
 import csv
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import os
 
 class Menu:
@@ -96,9 +96,16 @@ class CafeSystem:
             entry = input("\nEnter the name of the dish and quantity separated by a comma (or type 'done' to finish): ")
             if entry.lower() == 'done':
                 break
-            item, qty = entry.split(",")
-            qty = int(qty.strip())
-            customer_order.add_item(item.strip(), qty)
+            try:
+                item, qty = entry.split(",")
+                qty = int(qty.strip())  # This might raise a ValueError if the qty is not an integer
+                if qty <= 0:
+                    print("Quantity should be a positive integer. Please try again.")
+                    continue
+                customer_order.add_item(item.strip(), qty)
+            except ValueError:
+                print("Invalid input. Please enter in the format 'dish_name, quantity' with a valid quantity.")
+                continue
 
         customer_order.calculate_discount()
         self.customer_orders[customer_name] = customer_order
@@ -112,70 +119,80 @@ class CafeSystem:
 
     def save_order_to_csv(self, customer_name, customer_order):
         filename = "orders.csv"
-        # Check if the file exists and is empty to add headers
-        file_exists = os.path.isfile(filename)
-        with open(filename, mode="a", newline="") as file:
-            writer = csv.writer(file)
-            if not file_exists or os.path.getsize(filename) == 0:
-                writer.writerow(["Customer Name", "Item", "Quantity", "Item Total", "Subtotal", "Discount", "Total"])
-            for item, qty, item_total in customer_order.order_list:
-                writer.writerow([customer_name, item, qty, item_total, customer_order.subtotal, customer_order.discount, customer_order.total])
+        try:
+            file_exists = os.path.isfile(filename)
+            with open(filename, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                if not file_exists or os.path.getsize(filename) == 0:
+                    writer.writerow(["Customer Name", "Item", "Quantity", "Item Total", "Subtotal", "Discount", "Total"])
+                for item, qty, item_total in customer_order.order_list:
+                    writer.writerow([customer_name, item, qty, item_total, customer_order.subtotal, customer_order.discount, customer_order.total])
+        except Exception as e:
+            print(f"Error saving order to file: {e}")
 
     def conduct_survey(self, customer_name):
         filename = "survey.csv"
-        file_exists = os.path.isfile(filename)
-        feedback = input("How would you rate your experience (1-5)? ")
-        recommend = input("Would you recommend us to others? (yes/no): ")
+        try:
+            file_exists = os.path.isfile(filename)
+            feedback = input("How would you rate your experience (1-5)? ")
+            recommend = input("Would you recommend us to others? (yes/no): ")
 
-        with open(filename, mode="a", newline="") as file:
-            writer = csv.writer(file)
-            if not file_exists or os.path.getsize(filename) == 0:
-                writer.writerow(["Customer Name", "Feedback", "Recommend"])
-            writer.writerow([customer_name, feedback, recommend])
-        print("Thank you for your feedback!")
+            with open(filename, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                if not file_exists or os.path.getsize(filename) == 0:
+                    writer.writerow(["Customer Name", "Feedback", "Recommend"])
+                writer.writerow([customer_name, feedback, recommend])
+            print("Thank you for your feedback!")
+        except Exception as e:
+            print(f"Error saving survey response: {e}")
 
     def display_all_orders(self):
         for customer_name, order in self.customer_orders.items():
             order.display_order_summary()
-
+    
     def average_spent_per_customer(self):
-        # Read the data from the CSV file
-        customer_totals = {}
+        try:
+            total_spent = 0
+            total_customers = len(self.customer_orders)
 
-        with open("orders.csv", mode="r") as file:
-            reader = csv.reader(file)
-            next(reader)  # Skip header if present
-            for row in reader:
-                customer_name = row[0]
-                total_spent = float(row[6])  # Assuming 'total' is in the 7th column (index 6)
-                
-                # Add to the customer's total spent (accumulating if customer ordered multiple times)
-                if customer_name in customer_totals:
-                    customer_totals[customer_name] += total_spent
-                else:
-                    customer_totals[customer_name] = total_spent
+            if total_customers == 0:
+                print("No orders have been placed.")
+                return
 
-        # Check if there are any orders
-        if not customer_totals:
-            print("No orders to calculate average.")
-            return
+            # Calculate total amount spent by all customers
+            for customer_name, customer_order in self.customer_orders.items():
+                total_spent += customer_order.total
 
-        # Calculate the average spent per customer
-        average_spent = sum(customer_totals.values()) / len(customer_totals)
-        print(f"\nAverage amount spent per customer: {average_spent:.2f}")
+            # Calculate average spent per customer
+            average_spent = total_spent / total_customers
+            print(f"Average amount spent per customer: ₹{average_spent:.2f}")
 
-        # Plot the data
-        names = list(customer_totals.keys())
-        spends = list(customer_totals.values())
+            # Prepare data for the plot
+            names = list(self.customer_orders.keys())
+            spends = [order.total for order in self.customer_orders.values()]
 
-        plt.figure(figsize=(10, 5))
-        plt.bar(names, spends, color='skyblue')
-        plt.xlabel("Customers")
-        plt.ylabel("Total Spent (after discount)")
-        plt.title("Total Amount Spent by Each Customer")
-        plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels if necessary
-        plt.tight_layout()  # Adjust layout to avoid clipping of labels
-        plt.show()
+            # Create a Plotly bar chart
+            fig = go.Figure(data=[go.Bar(
+                x=names,
+                y=spends,
+                text=spends,
+                textposition='auto',
+                marker=dict(color='skyblue')
+            )])
+
+            # Add title and labels
+            fig.update_layout(
+                title="Total Amount Spent by Each Customer",
+                xaxis_title="Customers",
+                yaxis_title="Total Spent (after discount)",
+                showlegend=False
+            )
+
+            # Show the plot
+            fig.show()
+
+        except Exception as e:
+            print(f"Error calculating average spent per customer: {e}")
 
 
 # Main code to use the system
